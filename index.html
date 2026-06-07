@@ -1,0 +1,1584 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G-Unit Planner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #f4f6fb;
+            --sidebar: #ffffff;
+            --card: #ffffff;
+            --card-hover: #f0f3fa;
+            --border: #e2e8f0;
+            --border-light: #edf0f7;
+            --accent: #4f63e7;
+            --accent-dim: #dde2fd;
+            --text-primary: #1e2640;
+            --text-secondary: #64748b;
+            --text-muted: #a0aabf;
+            --todo-bg: #fff1f1; --todo-color: #d94040; --todo-border: #fcd0d0;
+            --prog-bg: #fff8ec; --prog-color: #c07020; --prog-border: #fde8b0;
+            --done-bg: #edfaf3; --done-color: #1e9055; --done-border: #b6e8cc;
+            --high-bg: #fff0f2; --high-color: #d93050; --high-border: #fbbfc9;
+            --med-bg:  #f5f5fa; --med-color:  #6060a0; --med-border:  #d8d8f0;
+            --low-bg:  #eef4ff; --low-color:  #3060c0; --low-border:  #bdd4f8;
+        }
+
+        html, body { height: 100%; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        /* ── LOGIN ── */
+        .login-wrap {
+            background: var(--sidebar);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 48px 40px;
+            width: 340px;
+            text-align: center;
+        }
+        .login-logo { font-size: 22px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+        .login-sub { font-size: 12px; color: var(--text-secondary); font-family: 'DM Mono', monospace; margin-bottom: 32px; }
+        .login-wrap input {
+            width: 100%; padding: 12px 14px; border-radius: 8px;
+            border: 1px solid var(--border); background: var(--bg);
+            color: var(--text-primary); font-size: 14px; font-family: 'DM Sans', sans-serif;
+            text-align: center; margin-bottom: 12px; outline: none;
+        }
+        .login-wrap input:focus { border-color: var(--accent); }
+        .login-btn {
+            width: 100%; padding: 12px; border-radius: 8px; border: none;
+            background: var(--accent); color: #fff; font-size: 14px;
+            font-weight: 600; font-family: 'DM Sans', sans-serif; cursor: pointer;
+        }
+        .login-btn:hover { background: #4a5de0; }
+
+        /* ── APP SHELL ── */
+        .app { display: none; width: 100%; height: 100vh; }
+
+        .layout { display: flex; height: 100vh; overflow: hidden; }
+
+        /* ── SIDEBAR ── */
+        .sidebar {
+            width: 230px; min-width: 230px; background: var(--sidebar);
+            border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; overflow-y: auto;
+        }
+        .sidebar-logo { padding: 22px 20px 20px; border-bottom: 1px solid var(--border); }
+        .sidebar-logo-name { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+        .sidebar-logo-meta { font-size: 11px; color: var(--text-muted); font-family: 'DM Mono', monospace; margin-top: 2px; }
+
+        .nav-section { font-size: 10px; color: var(--text-muted); font-family: 'DM Mono', monospace;
+            letter-spacing: 1px; text-transform: uppercase; padding: 18px 20px 6px; }
+        .nav-item {
+            display: flex; align-items: center; gap: 10px; padding: 9px 20px;
+            font-size: 13px; color: var(--text-secondary); cursor: pointer;
+            border-right: 2px solid transparent; transition: all 0.15s;
+        }
+        .nav-item:hover { color: var(--text-primary); background: var(--card-hover); }
+        .nav-item.active { color: var(--accent); background: var(--accent-dim); border-right-color: var(--accent); font-weight: 500; }
+        .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.8; }
+
+        .sidebar-avatar { margin-top: auto; padding: 16px 20px; border-top: 1px solid var(--border);
+            display: flex; align-items: center; gap: 10px; }
+        .avatar-circle { width: 32px; height: 32px; border-radius: 50%; background: var(--accent-dim);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 600; color: #8892c8; flex-shrink: 0; }
+        .avatar-name { font-size: 13px; color: var(--text-primary); }
+        .avatar-role { font-size: 11px; color: var(--text-muted); }
+        .logout-link { margin-left: auto; font-size: 12px; color: var(--text-muted);
+            cursor: pointer; background: none; border: none; font-family: 'DM Sans', sans-serif; }
+        .logout-link:hover { color: var(--text-secondary); }
+
+        /* ── MAIN ── */
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+        .topbar {
+            background: var(--bg); border-bottom: 1px solid var(--border-light);
+            padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
+            flex-shrink: 0;
+        }
+        .topbar-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+        .topbar-date { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-family: 'DM Mono', monospace; }
+        .topbar-right { display: flex; align-items: center; gap: 10px; }
+
+        .view-tabs { display: flex; gap: 4px; }
+        .view-tab { background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+            border-radius: 6px; padding: 6px 12px; font-size: 12px; font-family: 'DM Sans', sans-serif;
+            cursor: pointer; display: flex; align-items: center; gap: 5px; transition: all 0.15s; }
+        .view-tab svg { width: 13px; height: 13px; }
+        .view-tab.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+
+        .add-btn {
+            background: var(--accent); color: #fff; border: none; border-radius: 8px;
+            padding: 8px 14px; font-size: 13px; font-weight: 500;
+            font-family: 'DM Sans', sans-serif; cursor: pointer;
+            display: flex; align-items: center; gap: 6px; transition: background 0.15s;
+        }
+        .add-btn:hover { background: #4a5de0; }
+        .add-btn svg { width: 15px; height: 15px; }
+
+        /* ── CONTENT ── */
+        .content { flex: 1; overflow-y: auto; padding: 20px 24px; }
+
+        /* stats */
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
+        .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+        .stat-label { font-size: 10px; color: var(--text-muted); font-family: 'DM Mono', monospace;
+            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+        .stat-val { font-size: 22px; font-weight: 600; color: var(--text-primary); }
+        .stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+        /* filters */
+        .filters { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+        .filter-label { font-size: 10px; color: var(--text-muted); font-family: 'DM Mono', monospace;
+            text-transform: uppercase; letter-spacing: 0.5px; margin-right: 2px; }
+        .filter-btn { background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+            border-radius: 6px; padding: 5px 11px; font-size: 12px;
+            font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all 0.15s; }
+        .filter-btn:hover { background: var(--card-hover); color: var(--text-primary); }
+        .filter-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+        .filter-sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
+
+        /* task cards */
+        .task-list { display: flex; flex-direction: column; gap: 8px; }
+        .task-card {
+            background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+            padding: 14px 16px; display: flex; align-items: flex-start; gap: 12px;
+            transition: border-color 0.15s;
+        }
+        .task-card:hover { border-color: var(--accent-dim); }
+
+        .task-check {
+            width: 18px; height: 18px; min-width: 18px; border-radius: 5px;
+            border: 1.5px solid var(--text-muted); margin-top: 2px;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+        }
+        .task-check.done { background: #1e3a28; border-color: #2a6040; }
+        .task-check svg { width: 10px; height: 10px; }
+
+        .task-body { flex: 1; min-width: 0; }
+        .task-title { font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 7px; }
+        .task-title.done { text-decoration: line-through; color: var(--text-muted); }
+        .task-link { color: var(--accent); text-decoration: none; }
+        .task-link:hover { text-decoration: underline; }
+
+        .task-meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+
+        .badge { display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px;
+            border-radius: 5px; font-size: 11px; font-weight: 500;
+            font-family: 'DM Mono', monospace; border: 1px solid; white-space: nowrap; }
+        .badge.todo  { background: var(--todo-bg);  color: var(--todo-color);  border-color: var(--todo-border); }
+        .badge.inprogress { background: var(--prog-bg); color: var(--prog-color); border-color: var(--prog-border); }
+        .badge.done  { background: var(--done-bg);  color: var(--done-color);  border-color: var(--done-border); }
+        .badge.high  { background: var(--high-bg);  color: var(--high-color);  border-color: var(--high-border); }
+        .badge.medium{ background: var(--med-bg);   color: var(--med-color);   border-color: var(--med-border); }
+        .badge.low   { background: var(--low-bg);   color: var(--low-color);   border-color: var(--low-border); }
+
+        .badge select {
+            background: transparent; border: none; color: inherit;
+            font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500;
+            cursor: pointer; outline: none; padding: 0; -webkit-appearance: none;
+        }
+
+        .meta-chip { display: inline-flex; align-items: center; gap: 4px;
+            font-size: 11px; color: var(--text-secondary); font-family: 'DM Mono', monospace; }
+        .meta-chip svg { width: 11px; height: 11px; opacity: 0.6; }
+        .meta-chip select { background: transparent; border: none; color: var(--text-secondary);
+            font-family: 'DM Mono', monospace; font-size: 11px; cursor: pointer; outline: none;
+            -webkit-appearance: none; padding: 0; }
+
+        .comment-chip { font-size: 11px; color: var(--text-secondary); font-style: italic;
+            cursor: pointer; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .comment-chip:hover { color: var(--text-primary); }
+
+        .date-chip { font-size: 11px; color: var(--text-muted); font-family: 'DM Mono', monospace;
+            display: inline-flex; align-items: center; gap: 3px; }
+        .date-chip svg { width: 11px; height: 11px; }
+
+        /* subtasks */
+        .subtask-toggle { background: none; border: none; font-family: 'DM Sans', sans-serif;
+            font-size: 11px; color: var(--text-muted); cursor: pointer;
+            display: inline-flex; align-items: center; gap: 3px; margin-top: 7px;
+            padding: 0; transition: color 0.15s; }
+        .subtask-toggle:hover { color: var(--text-secondary); }
+        .subtask-toggle svg { width: 11px; height: 11px; transition: transform 0.2s; }
+        .subtask-toggle.open svg { transform: rotate(90deg); }
+        .subtask-list { display: none; margin-top: 8px; padding-top: 8px;
+            border-top: 1px solid var(--border-light); flex-direction: column; gap: 5px; }
+        .subtask-list.open { display: flex; }
+        .subtask-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+        .sub-check { width: 13px; height: 13px; min-width: 13px; border-radius: 3px;
+            border: 1.5px solid var(--border); cursor: pointer;
+            display: flex; align-items: center; justify-content: center; }
+        .sub-check.done { background: #1e3a28; border-color: #2a6040; }
+        .sub-check svg { width: 8px; height: 8px; }
+        .subtask-text.done { text-decoration: line-through; color: var(--text-muted); }
+
+        /* task actions */
+        .task-actions { display: flex; gap: 4px; align-items: flex-start; margin-top: 2px; }
+        .icon-btn { background: transparent; border: none; color: var(--text-muted);
+            cursor: pointer; padding: 5px; border-radius: 5px; display: flex; transition: all 0.15s; }
+        .icon-btn:hover { color: var(--text-secondary); background: var(--card-hover); }
+        .icon-btn svg { width: 14px; height: 14px; }
+        .icon-btn.danger:hover { color: #e05060; background: var(--high-bg); }
+
+        /* empty */
+        .badge.seg-sales    { background: #eef4ff; color: #2255cc; border-color: #bbd0f8; }
+        .badge.seg-partners { background: #f0faf4; color: #1a7a45; border-color: #a8e0be; }
+        .badge.seg-admin    { background: #f5f0ff; color: #6030b0; border-color: #d0b8f8; }
+
+        /* ── MOTIVATION PAGE ── */
+        .mot-controls { display:flex; gap:12px; align-items:flex-end; margin-bottom:18px; flex-wrap:wrap; }
+        .mot-period-wrap { display:flex; flex-direction:column; gap:4px; }
+        .mot-period-label { font-size:10px; color:var(--text-muted); font-family:'DM Mono',monospace; text-transform:uppercase; letter-spacing:0.5px; }
+        .mot-controls input[type="month"], .mot-controls select { padding:8px 10px; border:1px solid var(--border); border-radius:7px; background:var(--card); color:var(--text-primary); font-size:13px; font-family:'DM Sans',sans-serif; outline:none; }
+        .mot-controls input[type="month"]:focus, .mot-controls select:focus { border-color:var(--accent); }
+
+        .mot-header-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 20px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; }
+        .mot-manager-name { font-size:18px; font-weight:600; color:var(--text-primary); }
+        .mot-period-display { font-size:12px; color:var(--text-muted); font-family:'DM Mono',monospace; margin-top:3px; }
+        .mot-total-box { text-align:right; }
+        .mot-total-label-sm { font-size:11px; color:var(--text-muted); font-family:'DM Mono',monospace; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
+        .mot-total-big { font-size:26px; font-weight:600; color:var(--done-color); }
+
+        .mot-col-heads { display:grid; grid-template-columns:1fr 90px 130px 110px; gap:8px; padding:0 0 6px; border-bottom:1px solid var(--border); margin-bottom:4px; }
+        .mot-col-heads div { font-size:10px; color:var(--text-muted); font-family:'DM Mono',monospace; text-transform:uppercase; letter-spacing:0.5px; text-align:right; }
+        .mot-col-heads div:first-child { text-align:left; }
+
+        .mot-section { margin-bottom:8px; background:var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+        .mot-section-title { display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--bg); border-bottom:1px solid var(--border-light); flex-wrap:wrap; }
+        .mot-section-title-text { font-size:12px; font-weight:600; color:var(--text-primary); font-family:'DM Mono',monospace; text-transform:uppercase; letter-spacing:0.5px; min-width:80px; }
+        .mot-section-subtotal { font-size:13px; font-weight:600; color:var(--text-primary); font-family:'DM Mono',monospace; }
+        .mot-plan-cell { display:flex; flex-direction:column; gap:2px; }
+        .mot-plan-label { font-size:10px; color:var(--text-muted); font-family:'DM Mono',monospace; letter-spacing:0.3px; }
+        .mot-plan-input { width:110px; padding:5px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text-primary); font-family:'DM Mono',monospace; font-size:12px; text-align:right; outline:none; }
+        .mot-plan-input:focus { border-color:var(--accent); }
+        .mot-plan-input[readonly] { background:var(--card); color:var(--text-muted); cursor:default; }
+
+        .mot-subgroup { border-bottom:1px solid var(--border-light); }
+        .mot-subgroup:last-child { border-bottom:none; }
+        .mot-subgroup-title { padding:7px 14px 4px; font-size:11px; font-weight:600; color:var(--text-secondary); background:var(--bg); border-bottom:1px solid var(--border-light); }
+        .mot-item-row { display:grid; grid-template-columns:1fr 70px 120px 100px; gap:8px; padding:8px 14px; border-bottom:1px solid var(--border-light); align-items:center; }
+        .mot-item-row:last-child { border-bottom:none; }
+        .mot-item-name { font-size:13px; color:var(--text-primary); }
+        .mot-item-indent { padding-left:12px; }
+        .mot-item-pct { font-size:12px; color:var(--text-secondary); font-family:'DM Mono',monospace; text-align:right; }
+        .mot-item-val { font-size:13px; font-family:'DM Mono',monospace; color:var(--text-secondary); text-align:right; }
+        .mot-item-bonus { font-size:13px; font-family:'DM Mono',monospace; color:var(--done-color); text-align:right; font-weight:500; }
+
+        .mot-upload-wrap { display:flex; align-items:center; gap:12px; margin-top:10px; padding:12px 0; }
+        .mot-upload-btn { display:inline-flex; align-items:center; gap:6px; background:var(--card); border:1px solid var(--border); border-radius:7px; padding:8px 14px; font-size:13px; color:var(--text-primary); cursor:pointer; font-family:'DM Sans',sans-serif; }
+        .mot-upload-btn:hover { border-color:var(--accent); color:var(--accent); }
+        .mot-upload-hint { font-size:12px; color:var(--text-muted); font-family:'DM Mono',monospace; }
+
+        .mot-pdz-row { display:flex; justify-content:space-between; align-items:center; background:#fff8ec; border:1px solid #fde8b0; border-radius:10px; padding:12px 16px; margin-top:10px; }
+        .mot-pdz-label { font-size:13px; color:#c07020; display:flex; align-items:center; gap:7px; }
+        .mot-pdz-row input { padding:7px 10px; border:1px solid #fde8b0; border-radius:6px; background:#fff; color:var(--text-primary); font-family:'DM Mono',monospace; font-size:13px; outline:none; }
+
+        .mot-plan-bonus-line { font-size:13px; color:var(--done-color); font-family:'DM Mono',monospace; text-align:right; padding:6px 0 0; }
+
+        .mot-final-row { display:flex; justify-content:space-between; align-items:center; background:#edfaf3; border:1px solid #b6e8cc; border-radius:10px; padding:14px 20px; margin-top:10px; }
+        .mot-final-label { font-size:15px; font-weight:600; color:var(--done-color); }
+        .mot-final-val { font-size:24px; font-weight:700; color:var(--done-color); }
+
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 13px; }
+
+        /* ── CALENDAR ── */
+        #calendarView { display: none; }
+        .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+        .cal-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+        .cal-nav { background: var(--card); border: 1px solid var(--border); color: var(--text-secondary);
+            border-radius: 6px; padding: 6px 12px; font-size: 12px;
+            font-family: 'DM Sans', sans-serif; cursor: pointer; }
+        .cal-nav:hover { background: var(--card-hover); color: var(--text-primary); }
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+        .cal-weekday { background: var(--card); padding: 10px; text-align: center;
+            font-size: 10px; font-family: 'DM Mono', monospace; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 0.5px; border-radius: 6px; }
+        .cal-day { background: var(--card); border: 1px solid var(--border); min-height: 100px;
+            padding: 8px; border-radius: 8px; cursor: pointer; transition: border-color 0.15s; }
+        .cal-day:hover { border-color: var(--accent-dim); }
+        .cal-day.empty { background: transparent; border-color: transparent; cursor: default; opacity: 0.3; }
+        .cal-day.today { border-color: var(--accent); }
+        .cal-day-num { font-size: 12px; font-weight: 600; color: var(--text-secondary);
+            margin-bottom: 5px; font-family: 'DM Mono', monospace; }
+        .cal-task-pill { font-size: 10px; padding: 2px 5px; border-radius: 3px; margin-bottom: 2px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+        .cal-task-pill.todo { background: var(--todo-bg); color: var(--todo-color); border-left: 2px solid var(--todo-border); }
+        .cal-task-pill.inprogress { background: var(--prog-bg); color: var(--prog-color); border-left: 2px solid var(--prog-border); }
+        .cal-task-pill.done { background: var(--done-bg); color: var(--done-color); border-left: 2px solid var(--done-border); text-decoration: line-through; opacity: 0.7; }
+
+        /* ── MODALS ── */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            z-index: 100; justify-content: center; align-items: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal-box {
+            background: var(--sidebar); border: 1px solid var(--border);
+            border-radius: 16px; width: 100%; max-width: 800px; max-height: 90vh;
+            display: flex; flex-direction: column; overflow: hidden;
+            animation: fadeUp 0.2s ease-out;
+        }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        .modal-head { padding: 18px 20px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between; }
+        .modal-head-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+        .modal-close { background: none; border: none; color: var(--text-secondary);
+            cursor: pointer; font-size: 20px; line-height: 1; padding: 2px 6px; border-radius: 4px; }
+        .modal-close:hover { background: var(--card-hover); color: var(--text-primary); }
+        .modal-body-scroll { flex: 1; overflow-y: auto; }
+        .modal-all-day { padding: 14px 20px; border-bottom: 1px solid var(--border-light);
+            background: var(--bg); }
+        .modal-all-day-label { font-size: 10px; font-family: 'DM Mono', monospace;
+            text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px; }
+        .timeline-wrap { padding: 12px 20px; }
+        .tl-row { display: flex; border-bottom: 1px solid var(--border-light); padding: 6px 0;
+            align-items: flex-start; cursor: pointer; border-radius: 5px; transition: background 0.1s; }
+        .tl-row:hover { background: var(--card-hover); }
+        .tl-time { width: 55px; font-size: 11px; font-family: 'DM Mono', monospace;
+            color: var(--text-muted); padding-top: 8px; }
+        .tl-content { flex: 1; padding-left: 10px; min-height: 36px;
+            display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+        .modal-task-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+            background: var(--bg); }
+        .modal-task-title { font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 6px; }
+        .modal-task-bottom { display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+            font-size: 11px; color: var(--text-secondary); font-family: 'DM Mono', monospace; }
+        .modal-select-status { font-size: 11px; padding: 2px 6px; border-radius: 5px;
+            font-weight: 500; cursor: pointer; border: 1px solid; font-family: 'DM Mono', monospace;
+            background: var(--todo-bg); color: var(--todo-color); border-color: var(--todo-border); }
+        .inline-time-input { background: transparent; border: 1px dashed transparent; padding: 1px 4px;
+            font-size: 11px; color: var(--text-secondary); font-family: 'DM Mono', monospace;
+            border-radius: 3px; cursor: pointer; width: 80px; }
+        .inline-time-input:hover { border-color: var(--border); background: var(--bg); }
+        .inline-time-input:focus { border-color: var(--accent); outline: none; background: var(--bg); }
+        .inline-date-input { background: transparent; border: 1px dashed transparent; padding: 1px 4px;
+            font-size: 11px; color: var(--text-secondary); font-family: 'DM Mono', monospace;
+            border-radius: 3px; cursor: pointer; width: 120px; }
+        .inline-date-input:hover { border-color: var(--border); background: var(--bg); }
+        .inline-date-input:focus { border-color: var(--accent); outline: none; background: var(--bg); }
+        .modal-foot-form { padding: 14px 20px; border-top: 1px solid var(--border);
+            background: var(--bg); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .modal-foot-form input, .modal-foot-form select {
+            background: var(--card); border: 1px solid var(--border); color: var(--text-primary);
+            border-radius: 6px; padding: 8px 10px; font-size: 12px;
+            font-family: 'DM Sans', sans-serif; outline: none; }
+        .modal-foot-form input:focus, .modal-foot-form select:focus { border-color: var(--accent); }
+        .modal-foot-form input[type="text"] { flex: 2; min-width: 180px; }
+        .modal-foot-form select { min-width: 110px; }
+        .modal-foot-btn { background: var(--accent); color: #fff; border: none; border-radius: 6px;
+            padding: 8px 14px; font-size: 12px; font-weight: 500;
+            font-family: 'DM Sans', sans-serif; cursor: pointer; white-space: nowrap; }
+        .modal-foot-btn:hover { background: #4a5de0; }
+
+        /* create task modal */
+        .create-modal-box {
+            background: var(--sidebar); border: 1px solid var(--border);
+            border-radius: 14px; width: 100%; max-width: 440px;
+            padding: 24px; animation: fadeUp 0.2s ease-out;
+        }
+        .create-modal-title { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 18px; }
+        .form-group { margin-bottom: 13px; }
+        .form-group label { display: block; font-size: 11px; color: var(--text-muted);
+            font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; background: var(--bg); border: 1px solid var(--border);
+            color: var(--text-primary); border-radius: 7px; padding: 9px 11px;
+            font-size: 13px; font-family: 'DM Sans', sans-serif; outline: none; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+        .btn-cancel { background: var(--card); border: 1px solid var(--border); color: var(--text-secondary);
+            border-radius: 7px; padding: 9px 16px; font-size: 13px;
+            font-family: 'DM Sans', sans-serif; cursor: pointer; }
+        .btn-cancel:hover { color: var(--text-primary); border-color: var(--text-muted); }
+        .btn-save { background: var(--accent); color: #fff; border: none; border-radius: 7px;
+            padding: 9px 18px; font-size: 13px; font-weight: 500;
+            font-family: 'DM Sans', sans-serif; cursor: pointer; }
+        .btn-save:hover { background: #4a5de0; }
+    </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen" class="login-wrap">
+    <div class="login-logo">G-Unit Planner</div>
+    <div class="login-sub">командный пульт · вход</div>
+    <input type="password" id="passwordInput" placeholder="Введите пароль" onkeypress="if(event.key==='Enter')login()">
+    <button class="login-btn" onclick="login()">Войти</button>
+</div>
+
+<!-- APP -->
+<div id="appShell" class="app">
+<div class="layout">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <div class="sidebar-logo">
+            <div class="sidebar-logo-name">G-Unit Planner</div>
+            <div class="sidebar-logo-meta" id="sidebarMeta">v2.0</div>
+        </div>
+
+        <div class="nav-section">Навигация</div>
+        <div class="nav-item active" onclick="switchPage('table')">
+            <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+            Все задачи
+        </div>
+        <div class="nav-item" onclick="switchPage('calendar')">
+            <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            Календарь
+        </div>
+        <div class="nav-item" onclick="switchPage('motivation')">
+            <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            Мотивация
+        </div>
+
+        <div class="nav-section">Сегмент</div>
+        <div class="nav-item" id="navSegAll" onclick="filterBySegment('ALL')">
+            <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20"/></svg>
+            Все сегменты
+        </div>
+        <div class="nav-item" id="navSegSales" onclick="filterBySegment('sales')">
+            <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
+            Sales Team
+        </div>
+        <div class="nav-item" id="navSegPartners" onclick="filterBySegment('partners')">
+            <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+            Партнёры
+        </div>
+        <div class="nav-item" id="navSegAdmin" onclick="filterBySegment('admin')">
+            <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+            Адм. задача
+        </div>
+
+        <div class="nav-section">Команда</div>
+        <div class="nav-item" id="navAll" onclick="filterByManager('ALL')">
+            <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+            Все менеджеры
+        </div>
+        <div class="nav-item" onclick="filterByManager('Ник')">
+            <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Ник
+        </div>
+        <div class="nav-item" onclick="filterByManager('Артем')">
+            <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Артем
+        </div>
+        <div class="nav-item" onclick="filterByManager('Крис')">
+            <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Крис
+        </div>
+        <div class="nav-item" onclick="filterByManager('Инна')">
+            <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Инна
+        </div>
+
+        <div class="sidebar-avatar">
+            <div class="avatar-circle" id="avatarCircle">АД</div>
+            <div>
+                <div class="avatar-name" id="avatarName">...</div>
+                <div class="avatar-role" id="avatarRole">...</div>
+            </div>
+            <button class="logout-link" onclick="logout()">Выйти</button>
+        </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main">
+        <div class="topbar">
+            <div>
+                <div class="topbar-title" id="topbarTitle">Все задачи</div>
+                <div class="topbar-date" id="topbarDate"></div>
+            </div>
+            <div class="topbar-right">
+                <div class="view-tabs">
+                    <button class="view-tab active" id="btnTable" onclick="switchPage('table')">
+                        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                        Задачи
+                    </button>
+                    <button class="view-tab" id="btnCal" onclick="switchPage('calendar')">
+                        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                        Календарь
+                    </button>
+                </div>
+                <button class="add-btn" onclick="openAddTaskModal()">
+                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                    Новая задача
+                </button>
+            </div>
+        </div>
+
+        <div class="content">
+
+            <!-- TABLE VIEW -->
+            <div id="tableView">
+                <div class="stats-row" id="statsRow">
+                    <div class="stat-card"><div class="stat-label">Всего</div><div class="stat-val" id="statTotal">0</div><div class="stat-sub">активных задач</div></div>
+                    <div class="stat-card"><div class="stat-label">Нужно сделать</div><div class="stat-val" id="statTodo" style="color:var(--todo-color)">0</div><div class="stat-sub">в очереди</div></div>
+                    <div class="stat-card"><div class="stat-label">В процессе</div><div class="stat-val" id="statProg" style="color:var(--prog-color)">0</div><div class="stat-sub">выполняется</div></div>
+                    <div class="stat-card"><div class="stat-label">Выполнено</div><div class="stat-val" id="statDone" style="color:var(--done-color)">0</div><div class="stat-sub">завершено</div></div>
+                </div>
+
+                <div class="filters">
+                    <span class="filter-label">Сегмент:</span>
+                    <button class="filter-btn active" id="fbSegAll" onclick="setSegmentFilter('ALL',this)">Все</button>
+                    <button class="filter-btn" id="fbSegSales" onclick="setSegmentFilter('sales',this)">📈 Sales Team</button>
+                    <button class="filter-btn" id="fbSegPartners" onclick="setSegmentFilter('partners',this)">🤝 Партнёры</button>
+                    <button class="filter-btn" id="fbSegAdmin" onclick="setSegmentFilter('admin',this)">🏢 Адм. задача</button>
+                </div>
+
+                <div class="filters">
+                    <span class="filter-label">Статус:</span>
+                    <button class="filter-btn active" onclick="setFilter('all',this)">Все</button>
+                    <button class="filter-btn" onclick="setFilter('todo',this)">Нужно сделать</button>
+                    <button class="filter-btn" onclick="setFilter('inprogress',this)">В процессе</button>
+                    <button class="filter-btn" onclick="setFilter('done',this)">Выполнено</button>
+                </div>
+
+                <div class="task-list" id="taskList"></div>
+            </div>
+
+            <!-- CALENDAR VIEW -->
+            <div id="calendarView">
+                <div class="cal-header">
+                    <button class="cal-nav" onclick="changeMonth(-1)">◀ Назад</button>
+                    <div class="cal-title" id="calTitle"></div>
+                    <button class="cal-nav" onclick="changeMonth(1)">Вперёд ▶</button>
+                </div>
+                <div class="cal-grid" id="calGrid"></div>
+            </div>
+
+            <!-- MOTIVATION VIEW -->
+            <div id="motivationView" style="display:none;">
+                <div class="mot-controls">
+                    <div class="mot-period-wrap">
+                        <label class="mot-period-label">Период</label>
+                        <input type="month" id="motPeriod" value="2026-06" onchange="motRecalc()">
+                    </div>
+                    <div class="mot-period-wrap" id="motManagerWrap">
+                        <label class="mot-period-label">Менеджер</label>
+                        <select id="motManager" onchange="motRecalc()">
+                            <option value="all">🔥 Все менеджеры</option>
+                            <option value="Ник">Ник</option>
+                            <option value="Артем">Артем</option>
+                            <option value="Крис">Крис</option>
+                            <option value="Инна">Инна</option>
+                        </select>
+                    </div>
+                    <button class="add-btn" style="margin-left:auto;" onclick="motSaveToFirebase()">
+                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="width:15px;height:15px;"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        Сохранить
+                    </button>
+                </div>
+
+                <div class="mot-header-card">
+                    <div>
+                        <div class="mot-manager-name" id="motManagerName">Все менеджеры</div>
+                        <div class="mot-period-display" id="motPeriodDisplay">Июнь 2026</div>
+                    </div>
+                    <div class="mot-total-box">
+                        <div class="mot-total-label-sm">Итого бонус</div>
+                        <div class="mot-total-big"><span id="motTotalBonus">0</span> грн</div>
+                    </div>
+                </div>
+
+                <div class="mot-col-heads">
+                    <div>Направление</div>
+                    <div>Бонус %</div>
+                    <div>Выторг, грн</div>
+                    <div>Бонус, грн</div>
+                </div>
+
+                <div id="motSections"></div>
+
+                <div class="mot-pdz-row">
+                    <div class="mot-pdz-label">
+                        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" style="width:15px;height:15px;"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        ПДЗ (вычитается из бонуса)
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input type="number" id="motPdz" min="0" value="0" oninput="motRecalc()" style="width:130px;text-align:right;">
+                        <span style="font-size:13px;color:var(--text-secondary)">грн</span>
+                    </div>
+                </div>
+
+                <div class="mot-plan-bonus-line" id="motPlanBonusLine"></div>
+
+                <div class="mot-final-row">
+                    <div class="mot-final-label">💰 Зарплата к выплате</div>
+                    <div class="mot-final-val"><span id="motFinalSalary">0</span> грн</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+</div>
+
+<!-- DAY MODAL -->
+<div id="dayModal" class="modal-overlay" onclick="if(event.target===this)hideDayModal()">
+    <div class="modal-box">
+        <div class="modal-head">
+            <div class="modal-head-title" id="dayModalTitle">День</div>
+            <button class="modal-close" onclick="hideDayModal()">×</button>
+        </div>
+        <div class="modal-body-scroll">
+            <div class="modal-all-day">
+                <div class="modal-all-day-label">Задачи на весь день</div>
+                <div id="modalAllDay"></div>
+            </div>
+            <div class="timeline-wrap" id="modalTimeline"></div>
+        </div>
+        <div class="modal-foot-form">
+            <input type="text" id="modalTaskTitle" placeholder="Добавить задачу на весь день...">
+            <select id="modalTaskManager">
+                <option value="Ник">Ник</option><option value="Артем">Артем</option>
+                <option value="Крис">Крис</option><option value="Инна">Инна</option>
+                <option value="Администратор">Администратор</option><option value="ALL_MANAGERS">🔥 Всем</option>
+            </select>
+            <select id="modalTaskPriority">
+                <option value="low">Низкий</option><option value="medium" selected>Средний</option><option value="high">Срочно</option>
+            </select>
+            <button class="modal-foot-btn" id="modalSubmitBtn">+ Добавить</button>
+        </div>
+    </div>
+</div>
+
+<!-- CREATE TASK MODAL (time slot) -->
+<div id="createModal" class="modal-overlay" onclick="if(event.target===this)hideCreateModal()">
+    <div class="create-modal-box">
+        <div class="create-modal-title">📝 Новая задача</div>
+        <div class="form-group">
+            <label>Название</label>
+            <input type="text" id="cTitle" placeholder="Что нужно сделать?">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Менеджер</label>
+                <select id="cManager">
+                    <option value="Ник">Ник</option><option value="Артем">Артем</option>
+                    <option value="Крис">Крис</option><option value="Инна">Инна</option>
+                    <option value="Администратор">Администратор</option>
+                    <option value="ALL_MANAGERS">🔥 Все</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Приоритет</label>
+                <select id="cPriority">
+                    <option value="low">Низкий</option>
+                    <option value="medium" selected>Средний</option>
+                    <option value="high">Срочно</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Время</label>
+                <input type="time" id="cTime">
+            </div>
+            <div class="form-group">
+                <label>Дата</label>
+                <input type="date" id="cDate" disabled>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Комментарий</label>
+            <input type="text" id="cComment" placeholder="Детали...">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Сегмент</label>
+                <select id="cSegment">
+                    <option value="">— без сегмента —</option>
+                    <option value="sales">📈 Sales Team</option>
+                    <option value="partners">🤝 Партнёры</option>
+                    <option value="admin">🏢 Адм. задача</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Ссылка</label>
+                <input type="text" id="cUrl" placeholder="https://...">
+            </div>
+        </div>
+        <div class="form-actions">
+            <button class="btn-cancel" onclick="hideCreateModal()">Отмена</button>
+            <button class="btn-save" onclick="submitCreateModal()">Поставить задачу</button>
+        </div>
+    </div>
+</div>
+
+<!-- ADD TASK MODAL (from topbar) -->
+<div id="addModal" class="modal-overlay" onclick="if(event.target===this)hideAddModal()">
+    <div class="create-modal-box">
+        <div class="create-modal-title">➕ Новая задача</div>
+        <div class="form-group">
+            <label>Название</label>
+            <input type="text" id="aTitle" placeholder="Что нужно сделать?">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Менеджер</label>
+                <select id="aManager">
+                    <option value="Ник">Ник</option><option value="Артем">Артем</option>
+                    <option value="Крис">Крис</option><option value="Инна">Инна</option>
+                    <option value="Администратор">Администратор</option>
+                    <option value="ALL_MANAGERS">🔥 Все менеджеры</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Приоритет</label>
+                <select id="aPriority">
+                    <option value="low">Низкий</option>
+                    <option value="medium" selected>Средний</option>
+                    <option value="high">Срочно</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Статус</label>
+                <select id="aStatus">
+                    <option value="todo">Нужно сделать</option>
+                    <option value="inprogress">В процессе</option>
+                    <option value="done">Выполнено</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Сегмент</label>
+                <select id="aSegment">
+                    <option value="">— без сегмента —</option>
+                    <option value="sales">📈 Sales Team</option>
+                    <option value="partners">🤝 Партнёры</option>
+                    <option value="admin">🏢 Адм. задача</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+                <label>Дата дедлайна</label>
+                <input type="date" id="aDeadline">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Время</label>
+                <input type="time" id="aTime">
+            </div>
+            <div class="form-group">
+                <label>Ссылка</label>
+                <input type="text" id="aUrl" placeholder="https://...">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Комментарий</label>
+            <input type="text" id="aComment" placeholder="Детали, примечания...">
+        </div>
+        <div class="form-actions">
+            <button class="btn-cancel" onclick="hideAddModal()">Отмена</button>
+            <button class="btn-save" onclick="submitAddModal()">Добавить</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const USERS = {
+        "1": { name: "Ник", role: "manager" },
+        "2": { name: "Артем", role: "manager" },
+        "3": { name: "Крис", role: "manager" },
+        "4": { name: "Инна", role: "manager" },
+        "0307": { name: "Администратор", role: "admin" }
+    };
+
+    const TG_BOT_TOKEN = "8747804834:AAHXOsUsXbHcE5ubhVU3MrCGFvaITNxAfSQ";
+    const TELEGRAM_CHAT_IDS = {
+        "Ник": "46585686",
+        "Артем": "571850861",
+        "Крис": "917330344",
+        "Инна": "7876746275"
+    };
+
+    const firebaseConfig = { databaseURL: "https://g-unit-ccaf4-default-rtdb.europe-west1.firebasedatabase.app/" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let currentUser = null;
+    let cachedData = null;
+    let currentFilter = 'all';
+    let currentManagerFilter = 'ALL';
+    let currentPage = 'table';
+    let calendarDate = new Date();
+    let activeModalDate = null;
+
+    // ─── AUTH ───
+    function login() {
+        const pass = document.getElementById('passwordInput').value.trim();
+        if (!USERS[pass]) return alert('Неверный пароль!');
+        currentUser = USERS[pass];
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('appShell').style.display = 'block';
+        setupUI();
+        db.ref('tasks').on('value', snap => {
+            cachedData = snap.val();
+            if (currentPage === 'table') renderTasks();
+            else renderCalendar();
+            if (activeModalDate && document.getElementById('dayModal').classList.contains('open')) {
+                refreshDayModal(activeModalDate);
+            }
+        }, err => {
+            alert('Ошибка Firebase: ' + err.message + '\n\nПроверь правила базы данных (Rules) в Firebase Console — поставь read/write: true');
+        });
+    }
+
+    function logout() {
+        db.ref('tasks').off();
+        currentUser = null;
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('appShell').style.display = 'none';
+    }
+
+    function setupUI() {
+        const initials = currentUser.name.slice(0,2).toUpperCase();
+        document.getElementById('avatarCircle').textContent = initials;
+        document.getElementById('avatarName').textContent = currentUser.name;
+        document.getElementById('avatarRole').textContent = currentUser.role === 'admin' ? 'полный доступ' : 'менеджер';
+        document.getElementById('sidebarMeta').textContent = 'v2.0 · ' + (currentUser.role === 'admin' ? 'admin' : 'manager');
+
+        const d = new Date();
+        const days = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+        const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+        document.getElementById('topbarDate').textContent = `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+
+        if (currentUser.role === 'manager') {
+            ['aManager','cManager','modalTaskManager'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) { el.value = currentUser.name; el.disabled = true; }
+            });
+        }
+    }
+
+    // ─── NAVIGATION ───
+    function switchPage(page) {
+        currentPage = page;
+        document.getElementById('tableView').style.display = page === 'table' ? 'block' : 'none';
+        document.getElementById('calendarView').style.display = page === 'calendar' ? 'block' : 'none';
+        document.getElementById('motivationView').style.display = page === 'motivation' ? 'block' : 'none';
+        document.getElementById('btnTable').classList.toggle('active', page === 'table');
+        document.getElementById('btnCal').classList.toggle('active', page === 'calendar');
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        if (page === 'table') renderTasks();
+        else if (page === 'calendar') renderCalendar();
+        else if (page === 'motivation') { motBuildSections(); motLoadFromFirebase(); }
+    }
+
+    let currentSegmentFilter = 'ALL';
+
+    function setSegmentFilter(seg, el) {
+        currentSegmentFilter = seg;
+        document.querySelectorAll('[id^="fbSeg"]').forEach(b => b.classList.remove('active'));
+        el.classList.add('active');
+        renderTasks();
+    }
+
+    function filterBySegment(seg) {
+        currentSegmentFilter = seg;
+        document.querySelectorAll('[id^="fbSeg"]').forEach(b => b.classList.remove('active'));
+        const map = { ALL: 'fbSegAll', sales: 'fbSegSales', partners: 'fbSegPartners', admin: 'fbSegAdmin' };
+        if (map[seg]) document.getElementById(map[seg])?.classList.add('active');
+        switchPage('table');
+    }
+
+    function filterByManager(mgr) {
+        currentManagerFilter = mgr;
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        event.currentTarget.classList.add('active');
+        document.getElementById('topbarTitle').textContent = mgr === 'ALL' ? 'Все задачи' : 'Задачи — ' + mgr;
+        renderTasks();
+    }
+
+    function setFilter(f, el) {
+        currentFilter = f;
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        el.classList.add('active');
+        renderTasks();
+    }
+
+    // ─── RENDER TASKS ───
+    function renderTasks() {
+        const list = document.getElementById('taskList');
+        list.innerHTML = '';
+        if (!cachedData) { list.innerHTML = '<div class="empty-state">Задач пока нет. Команда отдыхает ☕</div>'; updateStats({}); return; }
+
+        let counts = { total: 0, todo: 0, inprogress: 0, done: 0 };
+        let hasVisible = false;
+
+        Object.keys(cachedData).forEach(id => {
+            const task = cachedData[id];
+            if (currentUser.role !== 'admin' && task.manager !== currentUser.name) return;
+
+            counts.total++;
+            if (task.status === 'todo') counts.todo++;
+            else if (task.status === 'inprogress') counts.inprogress++;
+            else if (task.status === 'done') counts.done++;
+
+            if (currentManagerFilter !== 'ALL' && task.manager !== currentManagerFilter) return;
+            if (currentFilter !== 'all' && task.status !== currentFilter) return;
+            if (currentSegmentFilter !== 'ALL' && task.segment !== currentSegmentFilter) return;
+
+            hasVisible = true;
+            list.appendChild(buildTaskCard(id, task));
+        });
+
+        updateStats(counts);
+        if (!hasVisible) list.innerHTML = '<div class="empty-state">Нет задач в выбранном фильтре.</div>';
+    }
+
+    function updateStats(c) {
+        document.getElementById('statTotal').textContent = c.total || 0;
+        document.getElementById('statTodo').textContent = c.todo || 0;
+        document.getElementById('statProg').textContent = c.inprogress || 0;
+        document.getElementById('statDone').textContent = c.done || 0;
+    }
+
+    function buildTaskCard(id, task) {
+        const card = document.createElement('div');
+        card.className = 'task-card';
+
+        const isDone = task.status === 'done';
+        const statusLabel = { todo: 'нужно сделать', inprogress: 'в процессе', done: 'выполнено' }[task.status] || task.status;
+        const prioLabel = { high: '🔥 срочно', medium: 'обычный', low: 'низкий' }[task.priority] || 'обычный';
+        const prioClass = task.priority || 'medium';
+
+        let titleHtml = `<span class="task-title${isDone?' done':''}">${task.title}</span>`;
+        if (task.url && task.url.trim()) {
+            const url = task.url.match(/^https?:\/\//) ? task.url : 'https://'+task.url;
+            titleHtml = `<a href="${url}" target="_blank" class="task-link task-title${isDone?' done':''}">${task.title}</a>`;
+        }
+
+        const managerDis = currentUser.role === 'manager' ? 'disabled' : '';
+        const dateStr = task.deadline ? formatDate(task.deadline, task.time) : '';
+
+        const subtasks = task.subtasks ? Object.entries(task.subtasks) : [];
+        const doneCount = subtasks.filter(([,s]) => s.done).length;
+        let subtaskHtml = '';
+        if (subtasks.length > 0) {
+            const items = subtasks.map(([sid, s]) => `
+                <div class="subtask-item">
+                    <div class="sub-check${s.done?' done':''}" onclick="toggleSubtask('${id}','${sid}',${!s.done})">
+                        ${s.done ? '<svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>' : ''}
+                    </div>
+                    <span class="subtask-text${s.done?' done':''}">${s.text}</span>
+                </div>`).join('');
+            subtaskHtml = `
+                <button class="subtask-toggle" onclick="toggleSubtaskList(this)">
+                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+                    ${doneCount}/${subtasks.length} подзадач
+                </button>
+                <div class="subtask-list">${items}</div>`;
+        }
+
+        card.innerHTML = `
+            <div class="task-check${isDone?' done':''}" onclick="toggleDone('${id}','${task.status}')">
+                ${isDone ? '<svg fill="none" stroke="#3dba6e" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>' : ''}
+            </div>
+            <div class="task-body">
+                ${titleHtml}
+                <div class="task-meta">
+                    <span class="badge ${task.status}">
+                        <select class="badge ${task.status}" onchange="updateStatus('${id}',this.value)" style="background:transparent;border:none;color:inherit;font-family:'DM Mono',monospace;font-size:11px;font-weight:500;cursor:pointer;outline:none;-webkit-appearance:none;padding:0;">
+                            <option value="todo" ${task.status==='todo'?'selected':''}>нужно сделать</option>
+                            <option value="inprogress" ${task.status==='inprogress'?'selected':''}>в процессе</option>
+                            <option value="done" ${task.status==='done'?'selected':''}>выполнено</option>
+                        </select>
+                    </span>
+                    <span class="badge ${prioClass}">${prioLabel}</span>
+                    <span class="meta-chip">
+                        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        <select ${managerDis} onchange="updateManager('${id}',this.value)" style="background:transparent;border:none;color:var(--text-secondary);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;outline:none;-webkit-appearance:none;padding:0;">
+                            ${['Ник','Артем','Крис','Инна','Администратор'].map(m=>`<option value="${m}" ${task.manager===m?'selected':''}>${m}</option>`).join('')}
+                        </select>
+                    </span>
+                    ${dateStr ? `<span class="date-chip"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>${dateStr}</span>` : ''}
+                    ${task.comment ? `<span class="comment-chip" onclick="editComment('${id}','${(task.comment||'').replace(/'/g,"\\'")}')">💬 ${task.comment}</span>` : `<span class="comment-chip" style="color:var(--text-muted)" onclick="editComment('${id}','')">+ комментарий</span>`}
+                    ${task.segment ? `<span class="badge seg-${task.segment}">${{sales:'📈 Sales',partners:'🤝 Партнёры',admin:'🏢 Адм.'}[task.segment]||task.segment}</span>` : ''}
+                    <span class="meta-chip">
+                        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20"/></svg>
+                        <select onchange="updateSegment('${id}',this.value)" style="background:transparent;border:none;color:var(--text-secondary);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;outline:none;-webkit-appearance:none;padding:0;">
+                            <option value="" ${!task.segment?'selected':''}>— сегмент —</option>
+                            <option value="sales" ${task.segment==='sales'?'selected':''}>📈 Sales</option>
+                            <option value="partners" ${task.segment==='partners'?'selected':''}>🤝 Партнёры</option>
+                            <option value="admin" ${task.segment==='admin'?'selected':''}>🏢 Адм.</option>
+                        </select>
+                    </span>
+                </div>
+                ${subtaskHtml}
+            </div>
+            <div class="task-actions">
+                <button class="icon-btn" onclick="editComment('${id}','${(task.comment||'').replace(/'/g,"\\'")}')">
+                    <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+                <button class="icon-btn danger" onclick="deleteTask('${id}','${task.status}')">
+                    <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+                </button>
+            </div>
+        `;
+        return card;
+    }
+
+    function toggleSubtaskList(btn) {
+        btn.classList.toggle('open');
+        const list = btn.nextElementSibling;
+        list.classList.toggle('open');
+    }
+
+    // ─── CALENDAR ───
+    function renderCalendar() {
+        const grid = document.getElementById('calGrid');
+        const title = document.getElementById('calTitle');
+        grid.innerHTML = '';
+        const year = calendarDate.getFullYear();
+        const month = calendarDate.getMonth();
+        const monthNames = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+        title.textContent = `${monthNames[month]} ${year}`;
+
+        ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(d => {
+            const el = document.createElement('div'); el.className = 'cal-weekday'; el.textContent = d; grid.appendChild(el);
+        });
+
+        let first = new Date(year, month, 1).getDay() - 1;
+        if (first === -1) first = 6;
+        const total = new Date(year, month+1, 0).getDate();
+        const today = new Date();
+
+        for (let i = 0; i < first; i++) { const e = document.createElement('div'); e.className = 'cal-day empty'; grid.appendChild(e); }
+
+        for (let day = 1; day <= total; day++) {
+            const cell = document.createElement('div');
+            cell.className = 'cal-day';
+            const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+            if (today.getDate()===day && today.getMonth()===month && today.getFullYear()===year) cell.classList.add('today');
+            cell.innerHTML = `<div class="cal-day-num">${day}</div>`;
+            cell.onclick = () => openDayModal(ds, day, monthNames[month]);
+
+            if (cachedData) {
+                Object.values(cachedData).forEach(task => {
+                    if (currentUser.role !== 'admin' && task.manager !== currentUser.name) return;
+                    if (task.deadline === ds) {
+                        const pill = document.createElement('div');
+                        pill.className = `cal-task-pill ${task.status}`;
+                        const pre = currentUser.role === 'admin' ? `[${task.manager}] ` : '';
+                        pill.textContent = `${pre}${task.time?'('+task.time+') ':''}${task.title}`;
+                        cell.appendChild(pill);
+                    }
+                });
+            }
+            grid.appendChild(cell);
+        }
+    }
+
+    function changeMonth(dir) { calendarDate.setMonth(calendarDate.getMonth()+dir); renderCalendar(); }
+
+    // ─── DAY MODAL ───
+    function openDayModal(ds, dayNum, monthName) {
+        activeModalDate = ds;
+        document.getElementById('dayModalTitle').textContent = `📅 ${dayNum} ${monthName}`;
+        refreshDayModal(ds);
+        document.getElementById('modalSubmitBtn').onclick = () => addAllDayTask(ds);
+        document.getElementById('dayModal').classList.add('open');
+    }
+
+    function hideDayModal() { document.getElementById('dayModal').classList.remove('open'); activeModalDate = null; }
+
+    function refreshDayModal(ds) {
+        const allDay = document.getElementById('modalAllDay');
+        const timeline = document.getElementById('modalTimeline');
+        allDay.innerHTML = ''; timeline.innerHTML = '';
+
+        const slots = {};
+        for (let h = 0; h < 24; h++) slots[h] = [];
+
+        let hasAllDay = false;
+        if (cachedData) {
+            Object.keys(cachedData).forEach(id => {
+                const task = cachedData[id];
+                if (currentUser.role !== 'admin' && task.manager !== currentUser.name) return;
+                if (task.deadline !== ds) return;
+                task.id = id;
+                if (!task.time) { hasAllDay = true; allDay.appendChild(buildModalTaskCard(task)); }
+                else { const h = parseInt(task.time.split(':')[0],10); if (slots[h]) slots[h].push(task); }
+            });
+        }
+        if (!hasAllDay) allDay.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Нет задач на весь день</div>';
+
+        for (let h = 0; h < 24; h++) {
+            const row = document.createElement('div');
+            row.className = 'tl-row';
+            row.onclick = () => { openCreateModal(ds, String(h).padStart(2,'0')+':00'); };
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'tl-time';
+            timeDiv.textContent = String(h).padStart(2,'0')+':00';
+            const content = document.createElement('div');
+            content.className = 'tl-content';
+            slots[h].forEach(task => content.appendChild(buildModalTaskCard(task)));
+            row.appendChild(timeDiv); row.appendChild(content);
+            timeline.appendChild(row);
+        }
+    }
+
+    function buildModalTaskCard(task) {
+        const card = document.createElement('div');
+        card.className = 'modal-task-card';
+        card.onclick = e => e.stopPropagation();
+
+        let titleHtml = `<div class="modal-task-title">${task.title}</div>`;
+        if (task.url && task.url.trim()) {
+            const url = task.url.match(/^https?:\/\//) ? task.url : 'https://'+task.url;
+            titleHtml = `<div class="modal-task-title"><a href="${url}" target="_blank" class="task-link">${task.title}</a></div>`;
+        }
+
+        const statusColors = {
+            todo: 'background:var(--todo-bg);color:var(--todo-color);border-color:var(--todo-border)',
+            inprogress: 'background:var(--prog-bg);color:var(--prog-color);border-color:var(--prog-border)',
+            done: 'background:var(--done-bg);color:var(--done-color);border-color:var(--done-border)'
+        };
+
+        card.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+                ${titleHtml}
+                <select class="modal-select-status" style="${statusColors[task.status]||statusColors.todo}" onchange="updateStatus('${task.id}',this.value)">
+                    <option value="todo" ${task.status==='todo'?'selected':''}>нужно сделать</option>
+                    <option value="inprogress" ${task.status==='inprogress'?'selected':''}>в процессе</option>
+                    <option value="done" ${task.status==='done'?'selected':''}>выполнено</option>
+                </select>
+            </div>
+            <div class="modal-task-bottom">
+                <span>👤 ${task.manager}</span>
+                <span>⏱ <input type="time" class="inline-time-input" value="${task.time||''}" onchange="db.ref('tasks/${task.id}').update({time:this.value})"></span>
+                <span>📅 <input type="date" class="inline-date-input" value="${task.deadline||''}" onchange="updateTaskDeadline('${task.id}',this.value)"></span>
+                ${task.comment ? `<span style="font-style:italic">💬 ${task.comment}</span>` : ''}
+            </div>
+        `;
+        return card;
+    }
+
+    function updateTaskDeadline(id, val) {
+        if (!val) return;
+        db.ref('tasks/'+id).update({ deadline: val });
+        setTimeout(() => { if (activeModalDate) refreshDayModal(activeModalDate); }, 150);
+    }
+
+    function addAllDayTask(ds) {
+        const title = document.getElementById('modalTaskTitle').value.trim();
+        if (!title) return alert('Введите название задачи.');
+        const mgr = document.getElementById('modalTaskManager').value;
+        const prio = document.getElementById('modalTaskPriority').value;
+        const mgrs = mgr === 'ALL_MANAGERS' ? ['Ник','Артем','Крис','Инна'] : [mgr];
+        mgrs.forEach(m => {
+            const t = { title, manager: m, status: 'todo', comment: '', deadline: ds, time: '', priority: prio, url: '' };
+            db.ref('tasks').push(t);
+            if (currentUser.role === 'admin' && m !== 'Администратор') sendTelegram(t);
+        });
+        document.getElementById('modalTaskTitle').value = '';
+    }
+
+    // ─── CREATE MODAL (time slot) ───
+    function openCreateModal(ds, time) {
+        document.getElementById('cTitle').value = '';
+        document.getElementById('cTime').value = time;
+        document.getElementById('cDate').value = ds;
+        document.getElementById('cComment').value = '';
+        document.getElementById('cUrl').value = '';
+        document.getElementById('cPriority').value = 'medium';
+        if (currentUser.role !== 'admin') document.getElementById('cManager').value = currentUser.name;
+        document.getElementById('createModal').classList.add('open');
+        setTimeout(() => document.getElementById('cTitle').focus(), 100);
+    }
+
+    function hideCreateModal() { document.getElementById('createModal').classList.remove('open'); }
+
+    function submitCreateModal() {
+        const title = document.getElementById('cTitle').value.trim();
+        if (!title) return alert('Введите название.');
+        const mgr = document.getElementById('cManager').value;
+        const mgrs = mgr === 'ALL_MANAGERS' ? ['Ник','Артем','Крис','Инна'] : [mgr];
+        mgrs.forEach(m => {
+            const t = { title, manager: m, status: 'todo', comment: document.getElementById('cComment').value,
+                deadline: document.getElementById('cDate').value, time: document.getElementById('cTime').value,
+                priority: document.getElementById('cPriority').value, url: document.getElementById('cUrl').value,
+                segment: document.getElementById('cSegment').value || '' };
+            db.ref('tasks').push(t);
+            if (currentUser.role === 'admin' && m !== 'Администратор') sendTelegram(t);
+        });
+        hideCreateModal();
+    }
+
+    // ─── ADD MODAL (topbar) ───
+    function openAddTaskModal() {
+        document.getElementById('aTitle').value = '';
+        document.getElementById('aComment').value = '';
+        document.getElementById('aDeadline').value = '';
+        document.getElementById('aTime').value = '';
+        document.getElementById('aUrl').value = '';
+        document.getElementById('aPriority').value = 'medium';
+        document.getElementById('aStatus').value = 'todo';
+        if (currentUser.role !== 'admin') { document.getElementById('aManager').value = currentUser.name; document.getElementById('aManager').disabled = true; }
+        else { document.getElementById('aManager').disabled = false; }
+        document.getElementById('addModal').classList.add('open');
+        setTimeout(() => document.getElementById('aTitle').focus(), 100);
+    }
+
+    function hideAddModal() { document.getElementById('addModal').classList.remove('open'); }
+
+    function submitAddModal() {
+        const title = document.getElementById('aTitle').value.trim();
+        if (!title) return alert('Введите название.');
+        const mgr = document.getElementById('aManager').value;
+        const mgrs = mgr === 'ALL_MANAGERS' ? ['Ник','Артем','Крис','Инна'] : [mgr];
+        mgrs.forEach(m => {
+            const t = { title, manager: m, status: document.getElementById('aStatus').value,
+                comment: document.getElementById('aComment').value,
+                deadline: document.getElementById('aDeadline').value || '',
+                time: document.getElementById('aTime').value || '',
+                priority: document.getElementById('aPriority').value,
+                url: document.getElementById('aUrl').value || '',
+                segment: document.getElementById('aSegment').value || '' };
+            db.ref('tasks').push(t);
+            if (currentUser.role === 'admin' && m !== 'Администратор') sendTelegram(t);
+        });
+        hideAddModal();
+    }
+
+    // ─── TASK ACTIONS ───
+    function toggleDone(id, status) {
+        const newStatus = status === 'done' ? 'todo' : 'done';
+        db.ref('tasks/'+id).update({ status: newStatus });
+    }
+
+    function updateStatus(id, val) { db.ref('tasks/'+id).update({ status: val }); }
+    function updateManager(id, val) { db.ref('tasks/'+id).update({ manager: val }); }
+    function updateSegment(id, val) { db.ref('tasks/'+id).update({ segment: val }); }
+
+    function editComment(id, current) {
+        const val = prompt('Комментарий:', current);
+        if (val !== null) db.ref('tasks/'+id).update({ comment: val });
+    }
+
+    function deleteTask(id, status) {
+        if (status === 'todo' && currentUser.role !== 'admin') { alert('Удалять задачи "Нужно сделать" может только Администратор.'); return; }
+        if (confirm('Удалить задачу?')) db.ref('tasks/'+id).remove();
+    }
+
+    function toggleSubtask(taskId, subId, done) {
+        db.ref('tasks/'+taskId+'/subtasks/'+subId).update({ done });
+    }
+
+    // ─── MOTIVATION ───
+    const MOT_SECTIONS = [
+        { title: 'USED', items: [
+            { name: 'В+, А, А+, LN', pct: 0.002 },
+            { name: 'Grade B', pct: 0.0022 },
+            { name: 'Grade C', pct: 0.0025 },
+            { name: 'Grade D', pct: 0.0025 },
+        ]},
+        { title: 'Запчасти', items: [
+            { name: 'Продажа запчастей', pct: 0.01 },
+        ]},
+        { title: 'No panic', items: [
+            { name: 'Продажа гарантий', pct: 0.1 },
+        ]},
+        { title: 'Ком. сервис', items: [
+            { name: 'Продажа сервиса', pct: 0.03 },
+        ]},
+        { title: 'Samsung', items: [
+            { name: 'Stock', pct: 0.003 },
+            { name: 'Фокус модели (еженедельно)', pct: 0.004 },
+            { name: 'S-серия', pct: 0.005 },
+        ]},
+        { title: 'Brand New', items: [
+            { name: 'Blackview (планшеты, наушники, колонки, телефоны)', pct: 0.01 },
+            { name: 'Blackview мониторы', pct: 0.015 },
+            { name: 'Marshall', pct: 0.015 },
+            { name: 'DJI', pct: 0.015 },
+            { name: 'Comitok', pct: 0.02 },
+        ]},
+    ];
+
+    // planState[mgr][secTitle] = { plan: 0, bonus: 0 }
+    // motState[mgr][key] = выторг
+    const motState = {};
+    const planState = {};
+
+    function motGetMgr() {
+        return document.getElementById('motManager').value;
+    }
+    function motGetPeriod() {
+        return document.getElementById('motPeriod').value;
+    }
+    function motGetKey() {
+        return `motivation/${motGetPeriod().replace('-','_')}/${motGetMgr()}`;
+    }
+
+    function motBuildSections() {
+        const wrap = document.getElementById('motSections');
+        wrap.innerHTML = '';
+        const mgr = motGetMgr();
+
+        if (currentUser && currentUser.role !== 'admin') {
+            document.getElementById('motManagerWrap').style.display = 'none';
+            document.getElementById('motManager').value = currentUser.name;
+        }
+
+        if (!motState[mgr]) motState[mgr] = {};
+        if (!planState[mgr]) planState[mgr] = {};
+
+        MOT_SECTIONS.forEach(sec => {
+            const secKey = sec.title;
+            if (!planState[mgr][secKey]) planState[mgr][secKey] = { plan: 0, bonusAmt: 0 };
+
+            const div = document.createElement('div');
+            div.className = 'mot-section';
+
+            // Section header with plan fields
+            const isAdmin = currentUser && currentUser.role === 'admin';
+            const planVal = planState[mgr][secKey].plan || '';
+            const bonusVal = planState[mgr][secKey].bonusAmt || '';
+
+            div.innerHTML = `
+                <div class="mot-section-title">
+                    <div class="mot-section-title-text">${secKey}</div>
+                    <div class="mot-plan-cell">
+                        <span class="mot-plan-label">План, грн</span>
+                        <input type="number" min="0" placeholder="0"
+                            value="${planVal}"
+                            class="mot-plan-input"
+                            data-sec="${secKey}" data-field="plan"
+                            ${isAdmin ? '' : 'readonly'}
+                            oninput="motPlanInput(this)">
+                    </div>
+                    <div class="mot-plan-cell">
+                        <span class="mot-plan-label">Бонус за план, грн</span>
+                        <input type="number" min="0" placeholder="0"
+                            value="${bonusVal}"
+                            class="mot-plan-input"
+                            data-sec="${secKey}" data-field="bonusAmt"
+                            ${isAdmin ? '' : 'readonly'}
+                            oninput="motPlanInput(this)">
+                    </div>
+                    <div class="mot-plan-cell" style="text-align:right">
+                        <span class="mot-plan-label">Факт выторг</span>
+                        <div class="mot-section-subtotal" id="motSecFact_${secKey.replace(/\s+/g,'_')}">0</div>
+                    </div>
+                    <div class="mot-plan-cell" style="text-align:right">
+                        <span class="mot-plan-label">Бонус</span>
+                        <div class="mot-section-subtotal" id="motSec_${secKey.replace(/\s+/g,'_')}">0 грн</div>
+                    </div>
+                </div>`;
+
+            // Items — no input, read-only display (data comes from Excel later)
+            sec.items.forEach((item, i) => {
+                    const key = secKey + '_' + i;
+                    if (!motState[mgr][key]) motState[mgr][key] = 0;
+                    const row = document.createElement('div');
+                    row.className = 'mot-item-row';
+                    row.innerHTML = `
+                        <div class="mot-item-name">${item.name}</div>
+                        <div class="mot-item-pct">${(item.pct*100).toFixed(1)}%</div>
+                        <div class="mot-item-val" id="motVal_${key}">${(motState[mgr][key]||0).toLocaleString('uk-UA')}</div>
+                        <div class="mot-item-bonus" id="motBonus_${key}">0</div>`;
+                    div.appendChild(row);
+            });
+
+            wrap.appendChild(div);
+        });
+
+        // File upload button for excel
+        const uploadWrap = document.createElement('div');
+        uploadWrap.className = 'mot-upload-wrap';
+        uploadWrap.innerHTML = `
+            <label class="mot-upload-btn">
+                <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" style="width:15px;height:15px;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Загрузить отчёт Excel
+                <input type="file" accept=".xlsx,.xls" onchange="motLoadExcel(this)" style="display:none;">
+            </label>
+            <span class="mot-upload-hint" id="motUploadHint">файл не выбран</span>`;
+        document.getElementById('motSections').appendChild(uploadWrap);
+
+        motRecalc();
+    }
+
+    function motPlanInput(el) {
+        const mgr = motGetMgr();
+        const sec = el.dataset.sec;
+        const field = el.dataset.field;
+        if (!planState[mgr]) planState[mgr] = {};
+        if (!planState[mgr][sec]) planState[mgr][sec] = { plan: 0, bonusAmt: 0 };
+        planState[mgr][sec][field] = parseFloat(el.value) || 0;
+        motRecalc();
+    }
+
+    function motRecalc() {
+        const period = motGetPeriod();
+        const months = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+        const [y, m] = period.split('-');
+        document.getElementById('motPeriodDisplay').textContent = `${months[parseInt(m)-1]} ${y}`;
+        const mgr = motGetMgr();
+        document.getElementById('motManagerName').textContent = mgr === 'all' ? 'Все менеджеры' : mgr;
+
+        if (!motState[mgr]) motState[mgr] = {};
+        if (!planState[mgr]) planState[mgr] = {};
+
+        let grand = 0;
+        let planBonus = 0;
+
+        MOT_SECTIONS.forEach(sec => {
+            const secKey = sec.title;
+            let secBonus = 0;
+            let secFact = 0;
+
+            sec.items.forEach((item, i) => {
+                const key = secKey + '_' + i;
+                const val = motState[mgr][key] || 0;
+                const bonus = Math.round(val * item.pct);
+                secFact += val; secBonus += bonus; grand += bonus;
+                const bEl = document.getElementById('motBonus_' + key);
+                const vEl = document.getElementById('motVal_' + key);
+                if (bEl) bEl.textContent = bonus.toLocaleString('uk-UA');
+                if (vEl) vEl.textContent = val.toLocaleString('uk-UA');
+            });
+
+            // Plan check
+            const ps = planState[mgr][secKey] || { plan: 0, bonusAmt: 0 };
+            if (ps.plan > 0 && secFact >= ps.plan) {
+                planBonus += ps.bonusAmt || 0;
+                const secEl = document.getElementById('motSec_' + secKey.replace(/\s+/g,'_'));
+                if (secEl) secEl.style.color = 'var(--done-color)';
+            } else {
+                const secEl = document.getElementById('motSec_' + secKey.replace(/\s+/g,'_'));
+                if (secEl) secEl.style.color = '';
+            }
+
+            const secEl = document.getElementById('motSec_' + secKey.replace(/\s+/g,'_'));
+            const factEl = document.getElementById('motSecFact_' + secKey.replace(/\s+/g,'_'));
+            if (secEl) {
+                const planMet = ps.plan > 0 && secFact >= ps.plan;
+                secEl.textContent = secBonus.toLocaleString('uk-UA') + ' грн' + (planMet ? ' ✓' : '');
+                secEl.style.color = planMet ? 'var(--done-color)' : 'var(--text-primary)';
+            }
+            if (factEl) {
+                const planMet = ps.plan > 0 && secFact >= ps.plan;
+                factEl.textContent = secFact.toLocaleString('uk-UA') + (ps.plan > 0 ? ` / ${ps.plan.toLocaleString('uk-UA')}` : '');
+                factEl.style.color = planMet ? 'var(--done-color)' : (ps.plan > 0 && secFact > 0 ? 'var(--prog-color)' : 'var(--text-muted)');
+            }
+        });
+
+        const pdz = parseFloat(document.getElementById('motPdz').value) || 0;
+        const total = grand + planBonus;
+        const final = Math.max(0, total - pdz);
+
+        document.getElementById('motTotalBonus').textContent = total.toLocaleString('uk-UA');
+        document.getElementById('motFinalSalary').textContent = final.toLocaleString('uk-UA');
+
+        const pbEl = document.getElementById('motPlanBonusLine');
+        if (pbEl) pbEl.textContent = planBonus > 0 ? `+ ${planBonus.toLocaleString('uk-UA')} грн за выполнение планов` : '';
+    }
+
+    function motSaveToFirebase() {
+        const key = motGetKey();
+        const mgr = motGetMgr();
+        const saveData = {
+            values: motState[mgr] || {},
+            plans: planState[mgr] || {},
+            pdz: parseFloat(document.getElementById('motPdz').value) || 0
+        };
+        db.ref(key).set(saveData).then(() => alert('Сохранено!')).catch(e => alert('Ошибка: ' + e.message));
+    }
+
+    function motLoadFromFirebase() {
+        const key = motGetKey();
+        const mgr = motGetMgr();
+        db.ref(key).once('value', snap => {
+            const data = snap.val();
+            if (!data) { motBuildSections(); return; }
+            if (data.values) motState[mgr] = data.values;
+            if (data.plans) planState[mgr] = data.plans;
+            if (data.pdz !== undefined) document.getElementById('motPdz').value = data.pdz;
+            motBuildSections();
+        });
+    }
+
+    function motLoadExcel(input) {
+        const file = input.files[0];
+        if (!file) return;
+        document.getElementById('motUploadHint').textContent = 'Загружается...';
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const wb = XLSX.read(data, { type: 'array' });
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                // Parse: find manager column and direction rows
+                // Expected: row with manager name, columns with direction and sum
+                motParseExcel(rows);
+                document.getElementById('motUploadHint').textContent = `✓ ${file.name} загружен`;
+            } catch(err) {
+                alert('Ошибка чтения файла: ' + err.message);
+                document.getElementById('motUploadHint').textContent = 'Ошибка чтения';
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function motParseExcel(rows) {
+        // Simple parser: looks for direction names in first column, sum in next numeric column
+        // Will be refined once user shares real report structure
+        const dirMap = {
+            'used': ['в+','а+','grade b','grade c','grade d','ln'],
+            'Запчасти': ['запчаст','no panic','гарант'],
+            'Ком. сервис': ['сервис'],
+            'Samsung': ['stock','фокус','s-серия','samsung'],
+            'Brand New': ['blackview','marshall','dji','comitok']
+        };
+        alert('Файл прочитан! Как только ты пришлёшь структуру реального отчёта — настрою парсинг точно под неё.');
+    }
+
+
+    function formatDate(dateStr, timeStr) {
+        if (!dateStr) return '';
+        const d = new Date(dateStr+'T00:00:00');
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return `${d.getDate()} ${months[d.getMonth()]}${timeStr ? ' '+timeStr : ''}`;
+    }
+
+    function sendTelegram(task) {
+        const chatId = TELEGRAM_CHAT_IDS[task.manager];
+        if (!chatId) return;
+        const prioText = task.priority === 'high' ? '🚨 СРОЧНО' : task.priority === 'low' ? 'Низкий' : 'Обычный';
+        const deadline = task.deadline ? formatDate(task.deadline, task.time) : 'не указан';
+        let link = task.url && task.url.trim() ? `\n🔗 <b>Ссылка:</b> <a href="${task.url.match(/^https?:\/\//) ? task.url : 'https://'+task.url}">Открыть</a>` : '';
+        const text = `📌 <b>Новая задача!</b>\n\n📝 <b>Что сделать:</b> ${task.title}\n⚡ <b>Приоритет:</b> ${prioText}\n📅 <b>Дедлайн:</b> ${deadline}${link}\n💬 <b>Комментарий:</b> ${task.comment||'нет'}\n\n🚀 Удачи!`;
+        fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
+        }).catch(e => console.error('TG error:', e));
+    }
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</body>
+</html>
