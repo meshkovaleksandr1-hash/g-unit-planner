@@ -1362,7 +1362,9 @@
         return document.getElementById('motPeriod').value;
     }
     function motGetKey() {
-        return `motivation/${motGetPeriod().replace('-','_')}/${motGetMgr()}`;
+        const mgr = motGetMgr().replace(/\./g,'_').replace(/\//g,'_');
+        const period = motGetPeriod().replace('-','_');
+        return `motivation/${period}/${mgr}`;
     }
 
     function motBuildSections() {
@@ -1676,14 +1678,12 @@
         const rate = parseFloat(document.getElementById('motRate').value) || 44;
         const period = motGetPeriod();
         MANAGERS_ORDER.forEach(mgr => {
-            const key = `motivation/${period.replace('-','_')}/${mgr}`;
-            const saveData = {
-                values: motState[mgr] || {},
-                plans: planState[mgr] || {},
-                pdz: 0,
-                rate: rate
-            };
-            db.ref(key).update({ values: saveData.values, rate: rate });
+            const key = `motivation/${period.replace('-','_')}/${mgr.replace(/\./g,'_')}`;
+            const cleanValues = {};
+            Object.keys(motState[mgr] || {}).forEach(k => {
+                cleanValues[k.replace(/\./g,'_').replace(/\//g,'_')] = motState[mgr][k];
+            });
+            db.ref(key).update({ values: cleanValues, rate: rate });
         });
 
         // Rebuild current manager view
