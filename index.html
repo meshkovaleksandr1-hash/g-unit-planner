@@ -1355,7 +1355,10 @@
     const motState = {};
     const planState = {};
 
-    function motGetMgr() {
+    // Sanitize key for Firebase (no dots, #, $, /, [, ])
+    function fbKey(k) {
+        return k.replace(/[.#$\/\[\]]/g, '_');
+    }
         return document.getElementById('motManager').value;
     }
     function motGetPeriod() {
@@ -1427,15 +1430,15 @@
 
             // Items — no input, read-only display (data comes from Excel later)
             sec.items.forEach((item, i) => {
-                    const key = secKey + '_' + i;
+                    const key = fbKey(secKey + '_' + i);
                     if (!motState[mgr][key]) motState[mgr][key] = 0;
                     const row = document.createElement('div');
                     row.className = 'mot-item-row';
                     row.innerHTML = `
                         <div class="mot-item-name">${item.name}</div>
                         <div class="mot-item-pct">${(item.pct * 100).toFixed(2)}%</div>
-                        <div class="mot-item-val" id="motVal_${key}">${(motState[mgr][key]||0).toLocaleString('uk-UA')}</div>
-                        <div class="mot-item-bonus" id="motBonus_${key}">0</div>`;
+                        <div class="mot-item-val" id="motVal_${key}">$ ${(motState[mgr][key]||0).toLocaleString('uk-UA')}</div>
+                        <div class="mot-item-bonus" id="motBonus_${key}">0 грн</div>`;
                     div.appendChild(row);
             });
 
@@ -1487,7 +1490,7 @@
             let secFact = 0;
 
             sec.items.forEach((item, i) => {
-                const key = secKey + '_' + i;
+                const key = fbKey(secKey + '_' + i);
                 const val = motState[mgr][key] || 0;
                 const bonus = Math.round(val * item.pct);
                 secFact += val; secBonus += bonus; grand += bonus;
@@ -1628,6 +1631,9 @@
             'Ком. сервис':                         { sec: 'Ком. сервис', idx: 0 },
         };
 
+        // Build key the same way motBuildSections does, then sanitize
+        function makeKey(sec, idx) { return fbKey(sec + '_' + idx); }
+
         // Find header row — where manager names appear
         let headerRow = -1;
         let mgrCols = {}; // { managerName: colIndex }
@@ -1657,14 +1663,14 @@
             if (!label || !ROW_MAP[label]) continue;
 
             const { sec, idx } = ROW_MAP[label];
-            const key = sec + '_' + idx;
+            const key = makeKey(sec, idx);
 
             MANAGERS_ORDER.forEach(mgr => {
                 const colIdx = mgrCols[mgr];
                 if (colIdx === undefined) return;
                 const val = parseFloat(String(row[colIdx]).replace(/[^0-9.-]/g,'')) || 0;
                 if (!motState[mgr]) motState[mgr] = {};
-                motState[mgr][key] = val;
+                motState[mgr][fbKey(key)] = val;
                 loaded++;
             });
         }
