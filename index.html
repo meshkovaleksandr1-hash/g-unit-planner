@@ -803,13 +803,33 @@
 </div>
 
 <script>
-    const TG_BOT_TOKEN = "8747804834:AAHXOsUsXbHcE5ubhVU3MrCGFvaITNxAfSQ";
-    const TELEGRAM_CHAT_IDS = {
-        "Кореневський Микита": "46585686",
-        "Фененко Артем": "571850861",
-        "Подлипинська Христина": "917330344",
-        "Свірк Інна": "7876746275"
-    };
+    let TG_BOT_TOKEN = '';
+    let TELEGRAM_CHAT_IDS = {};
+
+    // Загружаем конфиг (токены) из Firebase
+    function loadConfig() {
+        db.ref('config').once('value', snap => {
+            const cfg = snap.val();
+            if (cfg) {
+                TG_BOT_TOKEN = cfg.tgToken || '';
+                TELEGRAM_CHAT_IDS = cfg.tgChats || {};
+            } else {
+                // Первый запуск — сохраняем конфиг
+                const defaultConfig = {
+                    tgToken: '8747804834:AAHXOsUsXbHcE5ubhVU3MrCGFvaITNxAfSQ',
+                    tgChats: {
+                        'Кореневський Микита': '46585686',
+                        'Фененко Артем': '571850861',
+                        'Подлипинська Христина': '917330344',
+                        'Свірк Інна': '7876746275'
+                    }
+                };
+                db.ref('config').set(defaultConfig);
+                TG_BOT_TOKEN = defaultConfig.tgToken;
+                TELEGRAM_CHAT_IDS = defaultConfig.tgChats;
+            }
+        });
+    }
 
     const firebaseConfig = {
         apiKey: "AIzaSyD0_MaMsz9PItoLza_4fSaZO_7CNeDRG2U",
@@ -852,6 +872,7 @@
                 const info = USERS[email];
                 if (!info) { auth.signOut(); return alert('Користувач не знайдений.'); }
                 currentUser = info;
+                loadConfig();
                 document.getElementById('loginScreen').style.display = 'none';
                 document.getElementById('appShell').style.display = 'block';
                 setupUI();
