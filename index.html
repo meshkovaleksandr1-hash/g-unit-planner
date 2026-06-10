@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -421,9 +422,10 @@
 <!-- LOGIN -->
 <div id="loginScreen" class="login-wrap">
     <div class="login-logo">G-Unit Planner</div>
-    <div class="login-sub">командный пульт · вход</div>
-    <input type="password" id="passwordInput" placeholder="Введите пароль" onkeypress="if(event.key==='Enter')login()">
-    <button class="login-btn" onclick="login()">Войти</button>
+    <div class="login-sub">командний пульт · вхід</div>
+    <input type="email" id="emailInput" placeholder="Email" onkeypress="if(event.key==='Enter')login()" autocomplete="email">
+    <input type="password" id="passwordInput" placeholder="Пароль" onkeypress="if(event.key==='Enter')login()" autocomplete="current-password">
+    <button class="login-btn" onclick="login()">Увійти</button>
 </div>
 
 <!-- APP -->
@@ -817,9 +819,27 @@
         "Свірк Інна": "7876746275"
     };
 
-    const firebaseConfig = { databaseURL: "https://g-unit-ccaf4-default-rtdb.europe-west1.firebasedatabase.app/" };
+    const firebaseConfig = {
+        apiKey: "AIzaSyD0_MaMsz9PItoLza_4fSaZ0_7CNeDRG2U",
+        authDomain: "g-unit-ccaf4.firebaseapp.com",
+        databaseURL: "https://g-unit-ccaf4-default-rtdb.europe-west1.firebasedatabase.app/",
+        projectId: "g-unit-ccaf4",
+        storageBucket: "g-unit-ccaf4.firebasestorage.app",
+        messagingSenderId: "600951951656",
+        appId: "1:600951951656:web:3dbd68ff3ba7f628f3401d"
+    };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
+    const auth = firebase.auth();
+
+    // Email → роль і ім'я менеджера
+    const USERS = {
+        'nik@g-unit.com':   { name: 'Кореневський Микита',   role: 'manager' },
+        'artem@g-unit.com': { name: 'Фененко Артем',         role: 'manager' },
+        'krys@g-unit.com':  { name: 'Подлипинська Христина', role: 'manager' },
+        'inna@g-unit.com':  { name: 'Свірк Інна',            role: 'manager' },
+        'admin@g-unit.com': { name: 'Адміністратор',         role: 'admin'   },
+    };
 
     let currentUser = null;
     let cachedData = null;
@@ -831,26 +851,42 @@
 
     // ─── AUTH ───
     function login() {
-        const pass = document.getElementById('passwordInput').value.trim();
-        if (!USERS[pass]) return alert('Неверный пароль!');
-        currentUser = USERS[pass];
-        document.getElementById('loginScreen').style.display = 'none';
-        document.getElementById('appShell').style.display = 'block';
-        setupUI();
-        db.ref('tasks').on('value', snap => {
-            cachedData = snap.val();
-            if (currentPage === 'table') renderTasks();
-            else renderCalendar();
-            if (activeModalDate && document.getElementById('dayModal').classList.contains('open')) {
-                refreshDayModal(activeModalDate);
-            }
-        }, err => {
-            alert('Ошибка Firebase: ' + err.message + '\n\nПроверь правила базы данных (Rules) в Firebase Console — поставь read/write: true');
-        });
+        const email = document.getElementById('emailInput').value.trim().toLowerCase();
+        const pass  = document.getElementById('passwordInput').value.trim();
+        if (!email || !pass) return alert('Введіть email та пароль.');
+
+        auth.signInWithEmailAndPassword(email, pass)
+            .then(() => {
+                const info = USERS[email];
+                if (!info) { auth.signOut(); return alert('Користувач не знайдений.'); }
+                currentUser = info;
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('appShell').style.display = 'block';
+                setupUI();
+                db.ref('tasks').on('value', snap => {
+                    cachedData = snap.val();
+                    if (currentPage === 'table') renderTasks();
+                    else if (currentPage === 'calendar') renderCalendar();
+                    if (activeModalDate && document.getElementById('dayModal').classList.contains('open')) {
+                        refreshDayModal(activeModalDate);
+                    }
+                }, err => {
+                    alert('Помилка Firebase: ' + err.message);
+                });
+            })
+            .catch(err => {
+                const msg = (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential')
+                    ? 'Невірний email або пароль!'
+                    : err.message;
+                alert(msg);
+            });
     }
+
+    function handleKeyPress(e) { if (e.key === 'Enter') login(); }
 
     function logout() {
         db.ref('tasks').off();
+        auth.signOut();
         currentUser = null;
         document.getElementById('loginScreen').style.display = 'flex';
         document.getElementById('appShell').style.display = 'none';
