@@ -476,6 +476,7 @@
             <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
             Все менеджеры
         </div>
+        <div id="sidebarTeam">
         <div class="nav-item" onclick="filterByManager('Кореневський Микита')">
             <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             Кореневський Микита
@@ -491,6 +492,7 @@
         <div class="nav-item" onclick="filterByManager('Свірк Інна')">
             <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             Свірк Інна
+        </div>
         </div>
 
         <div class="sidebar-avatar">
@@ -610,7 +612,7 @@
                     <div>Направление</div>
                     <div>Бонус %</div>
                     <div>Выторг, $</div>
-                    <div>Бонус, грн</div>
+                    <div>Бонус, $</div>
                 </div>
 
                 <div id="motSections"></div>
@@ -916,6 +918,8 @@
         const days = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
         const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
         document.getElementById('topbarDate').textContent = `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+
+        document.getElementById('sidebarTeam').style.display = currentUser.role === 'admin' ? 'block' : 'none';
 
         if (currentUser.role === 'manager') {
             ['aManager','cManager','modalTaskManager'].forEach(id => {
@@ -1403,6 +1407,34 @@
             document.getElementById('motManager').value = currentUser.name;
         }
 
+        // Для режима "all" загружаем данные всех менеджеров из Firebase и суммируем
+        const MANAGERS_ALL = ['Кореневський Микита','Фененко Артем','Подлипинська Христина','Свірк Інна'];
+        if (mgr === 'all') {
+            const period = motGetPeriod();
+            let loaded = 0;
+            MANAGERS_ALL.forEach(m => {
+                const key = `motivation/${period.replace('-','_')}/${m.replace(/\./g,'_').replace(/\//g,'_')}`;
+                db.ref(key).once('value', snap => {
+                    const data = snap.val();
+                    if (data && data.values) motState[m] = data.values;
+                    loaded++;
+                    if (loaded === MANAGERS_ALL.length) {
+                        // Всё загружено — суммируем
+                        motState['all'] = {};
+                        MOT_SECTIONS.forEach(sec => {
+                            sec.items.forEach((item, i) => {
+                                const k = fbKey(sec.title + '_' + i);
+                                motState['all'][k] = MANAGERS_ALL.reduce((sum, mn) =>
+                                    sum + ((motState[mn] && motState[mn][k]) ? motState[mn][k] : 0), 0);
+                            });
+                        });
+                        motBuildSections();
+                    }
+                });
+            });
+            return; // Выходим — buildSections вызовется после загрузки
+        }
+
         if (!motState[mgr]) motState[mgr] = {};
         if (!planState[mgr]) planState[mgr] = {};
         MOT_SECTIONS.forEach(sec => {
@@ -1461,7 +1493,7 @@
                         <div class="mot-item-name">${item.name}</div>
                         <div class="mot-item-pct">${(item.pct * 100).toFixed(2)}%</div>
                         <div class="mot-item-val" id="motVal_${key}">$ ${(motState[mgr][key]||0).toLocaleString('uk-UA')}</div>
-                        <div class="mot-item-bonus" id="motBonus_${key}">0 грн</div>`;
+                        <div class="mot-item-bonus" id="motBonus_${key}">0 $</div>`;
                     div.appendChild(row);
             });
 
@@ -1519,7 +1551,7 @@
                 secFact += val; secBonus += bonus; grand += bonus;
                 const bEl = document.getElementById('motBonus_' + key);
                 const vEl = document.getElementById('motVal_' + key);
-                if (bEl) bEl.textContent = bonus.toLocaleString('uk-UA') + ' грн';
+                if (bEl) bEl.textContent = '$ ' + bonus.toLocaleString('uk-UA');
                 if (vEl) vEl.textContent = '$ ' + val.toLocaleString('uk-UA');
             });
 
@@ -1538,7 +1570,7 @@
             const factEl = document.getElementById('motSecFact_' + secKey.replace(/\s+/g,'_'));
             if (secEl) {
                 const planMet = ps.plan > 0 && secFact >= ps.plan;
-                secEl.textContent = secBonus.toLocaleString('uk-UA') + ' грн' + (planMet ? ' ✓' : '');
+                secEl.textContent = '$ ' + secBonus.toLocaleString('uk-UA') + (planMet ? ' ✓' : '');
                 secEl.style.color = planMet ? 'var(--done-color)' : 'var(--text-primary)';
             }
             if (factEl) {
